@@ -5,5 +5,5 @@ BLOCKCHAIN INTEGRATION AND ML INTEGRATION ARE TO BE DONE<br>
 This is the web application it also has a mobile application the ml integration are to be done<br>
 This is a team project including Nirupam Chakraborty, Manash Khatowal, lakhya Jyoti Saikia, Mousam Deka<br>
 
-
+ML model added for disease detection
 ......updating soon
