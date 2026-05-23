@@ -7,3 +7,6 @@ This is a team project including Nirupam Chakraborty, Manash Khatowal, lakhya Jy
 
 ML model added for disease detection
 ......updating soon
+
+
+till here is v1
