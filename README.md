@@ -10,3 +10,9 @@ ML model added for disease detection
 
 
 till here is v1
+
+
+
+
+
+now v2 - with machine learning model link for unassigned user and patient, blockchain security for prescription,  Kotlin-based mobile application, and Next.js-based web application
