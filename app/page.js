@@ -71,7 +71,7 @@ export default async function Home() {
                     size="lg"
                     className="bg-amber-950/30 hover:bg-amber-900/50 text-amber-200 border border-amber-500/30 hover:border-amber-400 transition-all duration-300 shadow-[0_0_15px_rgba(245,158,11,0.08)] hover:shadow-[0_0_25px_rgba(245,158,11,0.25)]"
                   >
-                    <a href="https://render1-l9jg.onrender.com" target="_blank" rel="noopener noreferrer">
+                    <a href="https://disease-prediction-tay1.onrender.com/" target="_blank" rel="noopener noreferrer">
                       Predict Disease <Stethoscope className="h-5 w-5 ml-2 text-amber-400" />
                     </a>
                   </Button>

@@ -83,7 +83,7 @@ model Appointment {
 
   // Prescription fields
   prescriptionUrl          String?  // Cloudinary URL saved at PDF generation time (canonical source)
-  prescriptionHash         String?  // SHA-256 hash of the PDF bytes
+  prescriptionHash         String?  // keccak-256 hash of the PDF bytes
   uploadedPrescriptionUrl  String?  // Cloudinary URL of patient-uploaded PDF
   uploadedPrescriptionHash String?  // Hash of the uploaded PDF for tamper detection
 
@@ -174,8 +174,8 @@ model Prescription {
   // Cloudinary URL of the original generated PDF
   cloudinaryUrl     String
 
-  // SHA-256 hash of the PDF bytes — the value stored on-chain
-  sha256Hash        String
+  // keccak-256 hash of the PDF bytes — the value stored on-chain
+  keccak256Hash        String
 
   // Quorum blockchain anchor
   blockchainTxHash   String?
