@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,27 +9,31 @@ datasource db {
 
 model User {
   id                String    @id @default(uuid())
-  clerkUserId       String    @unique // Clerk's user ID
+  clerkUserId       String    @unique
   email             String    @unique
   name              String?
   imageUrl          String?
-  role              UserRole  @default(UNASSIGNED) // UNASSIGNED, PATIENT, DOCTOR, ADMIN
+  role              UserRole  @default(UNASSIGNED)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
-  
+
   // Patient-specific fields
-  credits           Int       @default(2) // Accumulated credit balance
-  
+  credits           Int       @default(2)
+
   // Doctor-specific fields
   specialty         String?
-  experience        Int?      // Years of experience
-  credentialUrl     String?   // Document URL
+  experience        Int?
+  credentialUrl     String?
   description       String?   @db.Text
-  verificationStatus VerificationStatus?  @default(PENDING)
-  
+  verificationStatus VerificationStatus? @default(PENDING)
+
+  // NEW — Blockchain wallet fields
+  walletAddress      String?  // Ethereum address on Quorum
+  encryptedWalletKey String?  // AES-256-GCM encrypted private key
+
   // Relations
-  patientAppointments Appointment[] @relation("PatientAppointments")
-  doctorAppointments  Appointment[] @relation("DoctorAppointments")
+  patientAppointments Appointment[]     @relation("PatientAppointments")
+  doctorAppointments  Appointment[]     @relation("DoctorAppointments")
   availabilities      Availability[]
   transactions        CreditTransaction[]
   payouts             Payout[]
@@ -52,13 +53,13 @@ enum VerificationStatus {
 }
 
 model Availability {
-  id        String   @id @default(uuid())
+  id        String     @id @default(uuid())
   doctorId  String
-  doctor    User     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctor    User       @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   startTime DateTime
   endTime   DateTime
   status    SlotStatus @default(AVAILABLE)
-  
+
   @@index([doctorId, startTime])
 }
 
@@ -69,23 +70,36 @@ enum SlotStatus {
 }
 
 model Appointment {
-  id                String   @id @default(uuid())
-  patientId         String
-  patient           User     @relation("PatientAppointments", fields: [patientId], references: [id])
-  doctorId          String
-  doctor            User     @relation("DoctorAppointments", fields: [doctorId], references: [id])
-  startTime         DateTime // Start time of appointment
-  endTime           DateTime // End time of appointment
-  status            AppointmentStatus @default(SCHEDULED)
-  notes             String?  @db.Text
-  patientDescription String? @db.Text
-    
+  id                 String            @id @default(uuid())
+  patientId          String
+  patient            User              @relation("PatientAppointments", fields: [patientId], references: [id])
+  doctorId           String
+  doctor             User              @relation("DoctorAppointments", fields: [doctorId], references: [id])
+  startTime          DateTime
+  endTime            DateTime
+  status             AppointmentStatus @default(SCHEDULED)
+  notes              String?           @db.Text
+  patientDescription String?           @db.Text
+
+  // Prescription fields
+  prescriptionUrl          String?  // Cloudinary URL saved at PDF generation time (canonical source)
+  prescriptionHash         String?  // SHA-256 hash of the PDF bytes
+  uploadedPrescriptionUrl  String?  // Cloudinary URL of patient-uploaded PDF
+  uploadedPrescriptionHash String?  // Hash of the uploaded PDF for tamper detection
+
+  // NEW — Blockchain fields
+  blockchainTxHash   String?  // Transaction hash when hash was anchored on Quorum
+  blockchainRecordId String?  // On-chain record ID from HealthcareRecord contract
+
   // Video session fields
-  videoSessionId    String?  // Vonage Video API Session ID
-  videoSessionToken String?  // Optional: Can store tokens if needed
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  videoSessionId    String?
+  videoSessionToken String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Immutable ledger entry — created once at PDF generation, never deleted
+  prescription      Prescription?
 
   @@index([status, startTime])
   @@index([doctorId, startTime])
@@ -98,35 +112,35 @@ enum AppointmentStatus {
 }
 
 model CreditTransaction {
-  id                String   @id @default(uuid())
-  userId            String
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount            Int      // Positive for additions, negative for usage
-  type              TransactionType
-  packageId         String?  // Reference to which package was purchased
-  createdAt         DateTime @default(now())
+  id        String          @id @default(uuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int
+  type      TransactionType
+  packageId String?
+  createdAt DateTime        @default(now())
 }
 
 enum TransactionType {
-  CREDIT_PURCHASE     // Credits purchased through Clerk Billing
-  APPOINTMENT_DEDUCTION // Credit used for appointment
-  ADMIN_ADJUSTMENT      // Manual adjustment by admin
+  CREDIT_PURCHASE
+  APPOINTMENT_DEDUCTION
+  ADMIN_ADJUSTMENT
 }
 
 model Payout {
-  id              String        @id @default(uuid())
-  doctorId        String
-  doctor          User          @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  amount          Float         // Total payout amount in USD
-  credits         Int           // Number of credits being paid out
-  platformFee     Float         // Platform fee deducted (2 USD per credit)
-  netAmount       Float         // Amount doctor receives (8 USD per credit)
-  paypalEmail     String        // Doctor's PayPal email for payout
-  status          PayoutStatus  @default(PROCESSING)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  processedAt     DateTime?     // When admin marked it as processed
-  processedBy     String?       // Admin who processed it
+  id          String       @id @default(uuid())
+  doctorId    String
+  doctor      User         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  amount      Float
+  credits     Int
+  platformFee Float
+  netAmount   Float
+  paypalEmail String
+  status      PayoutStatus @default(PROCESSING)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  processedAt DateTime?
+  processedBy String?
 
   @@index([status, createdAt])
   @@index([doctorId, status])
@@ -135,4 +149,41 @@ model Payout {
 enum PayoutStatus {
   PROCESSING
   PROCESSED
+}
+
+// ── Immutable prescription ledger ────────────────────────────────────────────
+// A write-once record created when a prescription PDF is first generated.
+// Unlike the Appointment table (which is mutable), rows here are NEVER updated
+// or deleted by the application. The DB user should have INSERT-only rights:
+//
+//   REVOKE UPDATE ON "Prescription" FROM <your_db_user>;
+//   REVOKE DELETE ON "Prescription" FROM <your_db_user>;
+//
+// This means even the admin/DB owner cannot silently erase prescription history.
+// The blockchain anchor (blockchainRecordId + blockchainTxHash) is the
+// cryptographic source of truth; this table is a queryable audit trail.
+model Prescription {
+  id                String   @id @default(uuid())
+
+  appointmentId     String   @unique
+  appointment       Appointment @relation(fields: [appointmentId], references: [id])
+
+  patientId         String
+  doctorId          String
+
+  // Cloudinary URL of the original generated PDF
+  cloudinaryUrl     String
+
+  // SHA-256 hash of the PDF bytes — the value stored on-chain
+  sha256Hash        String
+
+  // Quorum blockchain anchor
+  blockchainTxHash   String?
+  blockchainRecordId String?
+
+  // Immutable timestamp — no updatedAt intentionally
+  issuedAt          DateTime @default(now())
+
+  @@index([patientId])
+  @@index([doctorId])
 }

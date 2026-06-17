@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { approvePayout } from "@/actions/admin";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -8,18 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import {
-  Check,
-  User,
-  DollarSign,
-  Mail,
-  Stethoscope,
-  Loader2,
-  AlertCircle,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
 import {
   Dialog,
   DialogContent,
@@ -28,11 +19,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { approvePayout } from "@/actions/admin";
 import useFetch from "@/hooks/use-fetch";
-import { toast } from "sonner";
+import { format } from "date-fns";
+import {
+  AlertCircle,
+  Check,
+  IndianRupee,
+  Loader2,
+  Mail,
+  Stethoscope,
+  User,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { BarLoader } from "react-spinners";
+import { toast } from "sonner";
 
 export function PendingPayouts({ payouts }) {
   const [selectedPayout, setSelectedPayout] = useState(null);
@@ -113,10 +113,10 @@ export function PendingPayouts({ payouts }) {
                           </p>
                           <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-muted-foreground">
                             <div className="flex items-center">
-                              <DollarSign className="h-4 w-4 mr-1 text-emerald-400" />
+                              <IndianRupee className="h-4 w-4 mr-1 text-emerald-400" />
                               <span>
                                 {payout.credits} credits • $
-                                {payout.netAmount.toFixed(2)}
+                                ₹{payout.netAmount.toFixed(2)}
                               </span>
                             </div>
                             <div className="flex items-center">
@@ -227,7 +227,7 @@ export function PendingPayouts({ payouts }) {
               {/* Payout Information */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5 text-emerald-400" />
+                  <IndianRupee className="h-5 w-5 text-emerald-400" />
                   <h3 className="text-white font-medium">Payout Details</h3>
                 </div>
                 <div className="bg-muted/20 p-4 rounded-lg border border-emerald-900/20 space-y-3">
@@ -244,7 +244,7 @@ export function PendingPayouts({ payouts }) {
                       Gross amount (10 USD/credit):
                     </span>
                     <span className="text-white">
-                      ${selectedPayout.amount.toFixed(2)}
+                      ₹{selectedPayout.amount.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -252,13 +252,13 @@ export function PendingPayouts({ payouts }) {
                       Platform fee (2 USD/credit):
                     </span>
                     <span className="text-white">
-                      -${selectedPayout.platformFee.toFixed(2)}
+                      -₹{selectedPayout.platformFee.toFixed(2)}
                     </span>
                   </div>
                   <div className="border-t border-emerald-900/20 pt-3 flex justify-between font-medium">
                     <span className="text-white">Net payout:</span>
                     <span className="text-emerald-400">
-                      ${selectedPayout.netAmount.toFixed(2)}
+                      ₹{selectedPayout.netAmount.toFixed(2)}
                     </span>
                   </div>
                   <div className="border-t border-emerald-900/20 pt-3">
@@ -349,7 +349,7 @@ export function PendingPayouts({ payouts }) {
                 <div className="flex justify-between mb-2">
                   <span className="text-muted-foreground">Amount to pay:</span>
                   <span className="text-emerald-400 font-medium">
-                    ${selectedPayout.netAmount.toFixed(2)}
+                    ₹{selectedPayout.netAmount.toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between">

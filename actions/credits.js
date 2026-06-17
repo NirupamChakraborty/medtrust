@@ -1,194 +1,133 @@
 "use server";
 
+import { APPOINTMENT_CREDIT_COST, PLANS } from "@/lib/plans";
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
-import { format } from "date-fns";
+import crypto from "crypto";
 import { revalidatePath } from "next/cache";
 
-// Define credit allocations per plan
-const PLAN_CREDITS = {
-  free_user: 0, // Basic plan: 2 credits
-  standard: 10, // Standard plan: 10 credits per month
-  premium: 24, // Premium plan: 24 credits per month
-};
 
-// Each appointment costs 2 credits
-const APPOINTMENT_CREDIT_COST = 2;
 
-/**
- * Checks user's subscription and allocates monthly credits if needed
- * This should be called on app initialization (e.g., in a layout component)
- */
-export async function checkAndAllocateCredits(user) {
-  try {
-    if (!user) {
-      return null;
-    }
+// ── Step 1: Create Razorpay order (called from client via server action) ──
+export async function createRazorpayOrder(planId) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
 
-    // Only allocate credits for patients
-    if (user.role !== "PATIENT") {
-      return user;
-    }
+  const plan = PLANS[planId];
+  if (!plan) throw new Error("Invalid plan selected");
 
-    // Check if user has a subscription
-    const { has } = await auth();
+  // Lazily import Razorpay — only runs on server
+  const Razorpay = (await import("razorpay")).default;
+  const razorpay = new Razorpay({
+    key_id:     process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
 
-    // Check which plan the user has
-    const hasBasic = has({ plan: "free_user" });
-    const hasStandard = has({ plan: "standard" });
-    const hasPremium = has({ plan: "premium" });
+  const order = await razorpay.orders.create({
+    amount:   plan.amount,
+    currency: "INR",
+    receipt:  `r_${userId}_${Date.now()}`.slice(0, 40),
+    notes:    { clerkUserId: userId, planId, credits: String(plan.credits) },
+  });
 
-    let currentPlan = null;
-    let creditsToAllocate = 0;
-
-    if (hasPremium) {
-      currentPlan = "premium";
-      creditsToAllocate = PLAN_CREDITS.premium;
-    } else if (hasStandard) {
-      currentPlan = "standard";
-      creditsToAllocate = PLAN_CREDITS.standard;
-    } else if (hasBasic) {
-      currentPlan = "free_user";
-      creditsToAllocate = PLAN_CREDITS.free_user;
-    }
-
-    // If user doesn't have any plan, just return the user
-    if (!currentPlan) {
-      return user;
-    }
-
-    // Check if we already allocated credits for this month
-    const currentMonth = format(new Date(), "yyyy-MM");
-
-    // If there's a transaction this month, check if it's for the same plan
-    if (user.transactions.length > 0) {
-      const latestTransaction = user.transactions[0];
-      const transactionMonth = format(
-        new Date(latestTransaction.createdAt),
-        "yyyy-MM"
-      );
-      const transactionPlan = latestTransaction.packageId;
-
-      // If we already allocated credits for this month and the plan is the same, just return
-      if (
-        transactionMonth === currentMonth &&
-        transactionPlan === currentPlan
-      ) {
-        return user;
-      }
-    }
-
-    // Allocate credits and create transaction record
-    const updatedUser = await db.$transaction(async (tx) => {
-      // Create transaction record
-      await tx.creditTransaction.create({
-        data: {
-          userId: user.id,
-          amount: creditsToAllocate,
-          type: "CREDIT_PURCHASE",
-          packageId: currentPlan,
-        },
-      });
-
-      // Update user's credit balance
-      const updatedUser = await tx.user.update({
-        where: {
-          id: user.id,
-        },
-        data: {
-          credits: {
-            increment: creditsToAllocate,
-          },
-        },
-      });
-
-      return updatedUser;
-    });
-
-    // Revalidate relevant paths to reflect updated credit balance
-    revalidatePath("/doctors");
-    revalidatePath("/appointments");
-
-    return updatedUser;
-  } catch (error) {
-    console.log("Failed to check subscription and allocate credits", {
-      message: error?.message,
-      stack: error?.stack,
-    });
-  
-    return {
-      success: false,
-      reason: "SUBSCRIPTION_CHECK_FAILED",
-    };
-  }
+  // Return only what the client needs — never expose key_secret
+  return {
+    orderId:     order.id,
+    amount:      order.amount,
+    currency:    order.currency,
+    planLabel:   plan.label,
+    credits:     plan.credits,
+    keyId:       process.env.RAZORPAY_KEY_ID,
+  };
 }
 
-/**
- * Deducts credits for booking an appointment
- */
+// ── Step 2: Verify payment + credit account ───────────────────────
+// Called from client after Razorpay checkout succeeds.
+// Verifies the HMAC signature so nobody can fake a payment.
+export async function verifyAndCreditPayment({
+  razorpay_order_id,
+  razorpay_payment_id,
+  razorpay_signature,
+  planId,
+}) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const plan = PLANS[planId];
+  if (!plan) throw new Error("Invalid plan");
+
+  // ── Verify HMAC signature ─────────────────────────────────────
+  const body     = razorpay_order_id + "|" + razorpay_payment_id;
+  const expected = crypto
+    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+    .update(body)
+    .digest("hex");
+
+  if (expected !== razorpay_signature) {
+    throw new Error("Payment verification failed — invalid signature");
+  }
+
+  // ── Credit the patient ────────────────────────────────────────
+  const user = await db.user.findUnique({
+    where:  { clerkUserId: userId },
+    select: { id: true },
+  });
+  if (!user) throw new Error("User not found");
+
+  await db.$transaction(async (tx) => {
+    await tx.creditTransaction.create({
+      data: {
+        userId:    user.id,
+        amount:    plan.credits,
+        type:      "CREDIT_PURCHASE",
+        packageId: planId,
+      },
+    });
+    await tx.user.update({
+      where: { id: user.id },
+      data:  { credits: { increment: plan.credits } },
+    });
+  });
+
+  revalidatePath("/pricing");
+  revalidatePath("/doctors");
+
+  return { success: true, credits: plan.credits };
+}
+
+// ── checkAndAllocateCredits — kept for header.jsx compatibility ───
+// Credits now come from Razorpay purchases, not Clerk subscriptions.
+// This is a no-op but kept so header.jsx doesn't break.
+export async function checkAndAllocateCredits(user) {
+  return user;
+}
+
+// ── Deduct credits for booking an appointment ─────────────────────
 export async function deductCreditsForAppointment(userId, doctorId) {
   try {
-    const user = await db.user.findUnique({
-      where: { id: userId },
-    });
+    const user   = await db.user.findUnique({ where: { id: userId } });
+    const doctor = await db.user.findUnique({ where: { id: doctorId } });
 
-    const doctor = await db.user.findUnique({
-      where: { id: doctorId },
-    });
-
-    // Ensure user has sufficient credits
     if (user.credits < APPOINTMENT_CREDIT_COST) {
       throw new Error("Insufficient credits to book an appointment");
     }
+    if (!doctor) throw new Error("Doctor not found");
 
-    if (!doctor) {
-      throw new Error("Doctor not found");
-    }
-
-    // Deduct credits from patient and add to doctor
     const result = await db.$transaction(async (tx) => {
-      // Create transaction record for patient (deduction)
       await tx.creditTransaction.create({
-        data: {
-          userId: user.id,
-          amount: -APPOINTMENT_CREDIT_COST,
-          type: "APPOINTMENT_DEDUCTION",
-        },
+        data: { userId: user.id, amount: -APPOINTMENT_CREDIT_COST, type: "APPOINTMENT_DEDUCTION" },
       });
-
-      // Create transaction record for doctor (addition)
       await tx.creditTransaction.create({
-        data: {
-          userId: doctor.id,
-          amount: APPOINTMENT_CREDIT_COST,
-          type: "APPOINTMENT_DEDUCTION", // Using same type for consistency
-        },
+        data: { userId: doctor.id, amount: APPOINTMENT_CREDIT_COST, type: "APPOINTMENT_DEDUCTION" },
       });
-
-      // Update patient's credit balance (decrement)
       const updatedUser = await tx.user.update({
-        where: {
-          id: user.id,
-        },
-        data: {
-          credits: {
-            decrement: APPOINTMENT_CREDIT_COST,
-          },
-        },
+        where: { id: user.id },
+        data:  { credits: { decrement: APPOINTMENT_CREDIT_COST } },
       });
-
-      // Update doctor's credit balance (increment)
       await tx.user.update({
-        where: {
-          id: doctor.id,
-        },
-        data: {
-          credits: {
-            increment: APPOINTMENT_CREDIT_COST,
-          },
-        },
+        where: { id: doctor.id },
+        data:  { credits: { increment: APPOINTMENT_CREDIT_COST } },
       });
-
       return updatedUser;
     });
 

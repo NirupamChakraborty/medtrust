@@ -147,14 +147,34 @@ export async function getDoctorAppointments() {
       where: {
         doctorId: doctor.id,
         status: {
-          in: ["SCHEDULED"],
+          // Include COMPLETED so doctors can still generate prescriptions,
+          // verify uploaded prescriptions, and view notes after the appointment ends.
+          in: ["SCHEDULED", "COMPLETED"],
         },
       },
       include: {
-        patient: true,
+        // patient relation — needed for AppointmentCard otherParty display
+        patient: {
+          select: {
+            id:       true,
+            name:     true,
+            email:    true,
+            imageUrl: true,
+          },
+        },
+        // doctor relation — needed for prescription.js blockchain calls
+        // (doctor.specialty used in addRecordOnChain disease field)
+        doctor: {
+          select: {
+            id:        true,
+            name:      true,
+            specialty: true,
+            imageUrl:  true,
+          },
+        },
       },
       orderBy: {
-        startTime: "asc",
+        startTime: "desc",
       },
     });
 

@@ -1,11 +1,11 @@
 import { verifyAdmin } from "@/actions/admin";
-import { redirect } from "next/navigation";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShieldCheck, AlertCircle, Users, CreditCard } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertCircle, CreditCard, ShieldCheck, Users } from "lucide-react";
+import { redirect } from "next/navigation";
 
 export const metadata = {
-  title: "Admin Settings - MediMeet",
+  title: "Admin Settings - MedTrust",
   description: "Manage doctors, patients, and platform settings",
 };
 
