@@ -337,7 +337,7 @@ export async function generatePrescriptionPDF(appointmentId) {
       doctorId: appointment.doctorId,
       cloudinaryUrl:prescriptionUrl,
       // sha256Hash:        contentHash,
-      keccakHash: contentHash,
+      keccak256Hash: contentHash,
       blockchainTxHash: txHash ?? null,
       blockchainRecordId: onChainRecordId !== null ? String(onChainRecordId) : null,
     },
