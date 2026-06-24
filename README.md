@@ -1,4 +1,5 @@
-# MedTrust — Blockchain-Backed Telemedicine Platform
+# MedTrust — Blockchain-Backed Telemedicine Platform with Deep Learning Model for disease prediction
+
 
 <div align="center">
 
